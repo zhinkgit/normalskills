@@ -1,0 +1,10 @@
+#IDE
+.vscode
+.idea
+.codex
+.claude
+
+config.json
+
+__pycache__
+.embeddedskills
