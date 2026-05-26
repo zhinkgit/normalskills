@@ -1,0 +1,4 @@
+interface:
+  display_name: "Grok Search"
+  short_description: "用 Grok 实时联网搜索并返回中文来源核验结果"
+  default_prompt: "Use $grok-search to search the live web, verify the latest information, and summarize the answer in Chinese with sources."

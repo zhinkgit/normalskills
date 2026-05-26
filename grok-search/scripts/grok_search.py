@@ -147,6 +147,14 @@ def _extract_urls(text: str) -> list[str]:
     return out
 
 
+def _build_research_query(query: str) -> str:
+    return (
+        "请执行实时联网研究。除非用户明确要求其他语言，否则用简体中文回答；"
+        "尽量给出可核验来源，并标明关键日期、版本或发布时间。\n\n"
+        f"用户问题：{query}"
+    )
+
+
 def _load_json_env(var_name: str) -> dict[str, Any]:
     raw = os.environ.get(var_name, "").strip()
     if not raw:
@@ -395,10 +403,11 @@ def _detect_api_type(api_type: str, model: str) -> str:
 # ---------------------------------------------------------------------------
 
 _DEFAULT_SYSTEM_PROMPT = (
-    "You are a web research assistant. Use live web search/browsing when answering. "
-    "Return ONLY a single JSON object with keys: "
-    "content (string), sources (array of objects with url/title/snippet when possible). "
-    "Keep content concise and evidence-backed."
+    "你是一个实时联网研究助手。回答时优先使用最新网页资料和可核验来源。"
+    "除非用户明确要求其他语言，否则 content 必须使用简体中文。"
+    "只返回一个 JSON 对象，包含 content 字符串和 sources 数组；"
+    "sources 中尽量提供 url、title、snippet。"
+    "内容要简洁、证据充分，并说明关键日期或版本。"
 )
 
 
@@ -423,7 +432,7 @@ def _request_chat_completions(
         "model": model,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": query},
+            {"role": "user", "content": _build_research_query(query)},
         ],
         "temperature": 0.2,
         "stream": False,
@@ -469,7 +478,7 @@ def _request_responses(
     body: dict[str, Any] = {
         "model": model,
         "input": [
-            {"role": "user", "content": query},
+            {"role": "user", "content": _build_research_query(query)},
         ],
         "tools": [{"type": "web_search"}],
         "stream": False,
@@ -586,18 +595,18 @@ def _extract_responses_result(resp: dict[str, Any], query: str) -> dict[str, Any
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Web research via OpenAI-compatible Grok endpoint (chat/completions & responses)."
+        description="通过 OpenAI 兼容的 Grok 端点执行实时联网研究。"
     )
-    parser.add_argument("--query", required=True, help="Search query / research task.")
-    parser.add_argument("--config", default="", help="Path to config JSON file.")
-    parser.add_argument("--base-url", default="", help="Override base URL.")
-    parser.add_argument("--api-key", default="", help="Override API key.")
-    parser.add_argument("--model", default="", help="Override model.")
+    parser.add_argument("--query", required=True, help="搜索查询或研究任务。")
+    parser.add_argument("--config", default="", help="配置 JSON 文件路径。")
+    parser.add_argument("--base-url", default="", help="覆盖 base URL。")
+    parser.add_argument("--api-key", default="", help="覆盖 API key。")
+    parser.add_argument("--model", default="", help="覆盖模型名称。")
     parser.add_argument("--api-type", default="", choices=["auto", "chat", "responses"],
-                        help="API type: auto (default), chat, or responses.")
-    parser.add_argument("--timeout-seconds", type=float, default=0.0, help="Override timeout (seconds).")
-    parser.add_argument("--extra-body-json", default="", help="Extra JSON object merged into request body.")
-    parser.add_argument("--extra-headers-json", default="", help="Extra JSON object merged into request headers.")
+                        help="API 类型：auto（默认）、chat 或 responses。")
+    parser.add_argument("--timeout-seconds", type=float, default=0.0, help="覆盖请求超时时间（秒）。")
+    parser.add_argument("--extra-body-json", default="", help="合并到请求体的额外 JSON 对象。")
+    parser.add_argument("--extra-headers-json", default="", help="合并到请求头的额外 JSON 对象。")
     args = parser.parse_args()
 
     # ---- 配置加载 ----

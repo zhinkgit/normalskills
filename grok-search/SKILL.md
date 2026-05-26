@@ -1,91 +1,60 @@
 ---
 name: grok-search
-description: Real-time web research/search with sources (outputs JSON).
+description: Grok 实时联网搜索与事实核验技能，调用 scripts/grok_search.py 获取带来源链接的 JSON 研究结果。凡是用户明确要求搜索、联网、查最新、核实资料、找来源、查官网文档、查新闻、版本、价格、法规、API 变更、错误信息、模型发布、竞品资料，或问题可能因时间变化而过期时，都应积极触发；即使用户没有明说搜索，只要答案需要外部证据、当前状态或精确出处，也优先使用本技能。输出和后续总结默认使用简体中文。
 ---
 
-## When to use (aggressive)
+# Grok Search
 
-- Default to using this skill before answering anything that might be outdated, ambiguous, or requires external confirmation (APIs, versions, errors, docs, releases).
-- If you feel even slightly unsure, search first, then answer with evidence.
+使用 Grok API 做实时联网研究，并把结果整理成带来源的 JSON。适合补充当前信息、核验事实、查找出处和对比公开资料。
 
-## Quick start
+## 工作流程
 
-### Configure (recommended)
+1. 先判断问题是否需要当前信息或外部证据；只要有明显时效性、来源要求或不确定性，就直接调用本技能。
+2. 用一句清晰中文查询描述目标；必要时加入时间范围、地区、产品名、版本号、错误码、官网域名或希望优先参考的来源。
+3. 运行脚本获取 JSON：
 
-Run once to write config:
-
-**Windows (PowerShell):**
 ```powershell
-powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.codex\skills\grok-search\configure.ps1"
+python .\scripts\grok_search.py --query "用中文查询：OpenAI 最新模型发布和官方来源"
 ```
 
-**macOS / Linux:**
-```bash
-bash ~/.codex/skills/grok-search/configure.sh
-```
+4. 阅读输出中的 `ok`、`content`、`sources`、`api_type`、`elapsed_ms`。若 `ok=false`，先把 `error/detail/config_path` 用于定位配置或接口问题。
+5. 回答用户时默认使用简体中文，优先给结论，再列来源；不要把 JSON 原样倾倒给用户，除非用户明确要原始结果。
 
-Default config path: `~/.codex/skills/grok-search/config.json` (override with `--config` or `GROK_CONFIG_PATH`).
+## 查询写法
 
-### Configure (env vars)
+- 最新状态：`"请用中文核实截至今天某项目的最新版本、发布时间和官方来源"`
+- 官方文档：`"请优先搜索 example.com 官方文档，核实某 API 当前参数"`
+- 错误排查：`"搜索错误信息 '...' 的近期资料，按官方 issue、文档、社区讨论排序"`
+- 对比研究：`"对比 A 和 B 的当前价格/限制/发布时间，给出来源链接"`
 
-```bash
-export GROK_BASE_URL="https://your-grok-endpoint.example"
-export GROK_API_KEY="YOUR_API_KEY"
-export GROK_MODEL="grok-2-latest"
-export GROK_API_TYPE="auto"          # auto | chat | responses
-export GROK_VERIFY_SSL="true"        # true | false
-```
+## 配置来源
 
-### Run
+脚本按以下优先级读取配置：
 
-```bash
-python scripts/grok_search.py --query "What changed in X recently?"
-```
+1. 命令行参数：`--config`、`--base-url`、`--api-key`、`--model`
+2. 环境变量：`GROK_CONFIG_PATH`、`GROK_BASE_URL`、`GROK_API_KEY`、`GROK_MODEL`
+3. 技能目录：`config.json`、`config.local.json`
+4. 用户目录：`~/.codex/config/grok-search.json`
 
-## API types
+可从 `config.example.json` 复制配置。不要把真实密钥写入示例文件或提交到仓库。
 
-The skill supports two API endpoints, selected via `api_type` config or `--api-type` flag:
+## API 模式
 
-| Value | Endpoint | When |
-|-------|----------|------|
-| `chat` | `/v1/chat/completions` | Standard models (grok-2, grok-4.1-thinking, etc.) |
-| `responses` | `/v1/responses` | Multi-agent models (grok-4.20-multi-agent-0309) |
-| `auto` (default) | Auto-detect | Uses `responses` when model name contains `multi-agent`, otherwise `chat` |
+- `api_type=auto`：默认模式，根据模型名自动选择。
+- `chat`：调用 `/v1/chat/completions`，适合普通 Grok 模型。
+- `responses`：调用 `/v1/responses`，自动带 `web_search` tool，适合 multi-agent / responses 类模型。
 
-The `responses` endpoint automatically enables `web_search` tool for the model.
+## 输出字段
 
-## Output
+- `content`：综合回答，默认应为中文。
+- `sources`：来源链接列表，尽量包含标题和摘要。
+- `raw`：模型未按 JSON 输出时的原文。
+- `reasoning`：thinking 模型返回的推理内容，通常只用于内部判断。
+- `usage`、`elapsed_ms`：用量和耗时。
 
-Prints JSON to stdout:
+## 使用约束
 
-- `ok`: boolean success flag
-- `content`: the synthesized answer
-- `sources`: best-effort list of URLs (and optional titles/snippets)
-- `raw`: raw assistant content (if JSON parsing failed, chat mode only)
-- `api_type`: which API was used (`chat` or `responses`)
-- `reasoning`: thinking/reasoning content (only present for thinking models)
-- `usage`: token usage info
-- `elapsed_ms`: request duration in milliseconds
-
-## Config fields
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `base_url` | (required) | API endpoint base URL |
-| `api_key` | (required) | Authentication key |
-| `model` | `grok-2-latest` | Model identifier |
-| `timeout_seconds` | `60` | Request timeout |
-| `api_type` | `auto` | `auto`, `chat`, or `responses` |
-| `verify_ssl` | `true` | Enable SSL certificate verification |
-| `system_prompt` | (built-in) | Custom system prompt (chat mode only) |
-| `max_retries` | `1` | Retry count for 5xx / timeout errors |
-| `extra_body` | `{}` | Extra fields merged into request body |
-| `extra_headers` | `{}` | Extra HTTP headers |
-
-## Notes
-
-- Endpoint: `POST {base_url}/v1/chat/completions` or `POST {base_url}/v1/responses`
-- You can override model via `--model` or `GROK_MODEL`.
-- If your API requires custom flags to enable web search, pass them via `--extra-body-json` / `GROK_EXTRA_BODY_JSON`.
-- SSL verification is enabled by default. Set `verify_ssl: false` in config or `GROK_VERIFY_SSL=false` to disable.
-- Failed requests (5xx, timeout) are retried up to `max_retries` times with 2s delay.
+- 对医疗、法律、金融、安全等高风险问题，搜索结果只能作为资料核验来源，回答时保留必要的不确定性。
+- 若用户要求官方来源，优先核对官网、文档、公告、仓库 release 或标准组织页面。
+- 若来源互相矛盾，说明冲突点和各自发布日期，不要强行合并成单一结论。
+- 若请求不需要当前信息或外部证据，不要为了形式调用搜索。
