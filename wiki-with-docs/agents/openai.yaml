@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wiki With Docs"
+  short_description: "面向代码库理解的架构、模块、流程与开发指南文档生成"
+  default_prompt: "Use $wiki-with-docs to analyze this repository and generate structured technical documentation."
